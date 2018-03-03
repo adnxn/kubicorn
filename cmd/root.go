@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kris-nova/kubicorn/pkg/local"
 	"github.com/kris-nova/kubicorn/pkg/logger"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -51,6 +53,8 @@ __custom_func() {
 `
 )
 
+var cfgFile = local.Expand("kubicorn.cfg")
+
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "kubicorn",
@@ -70,24 +74,8 @@ var RootCmd = &cobra.Command{
 	BashCompletionFunction: bashCompletionFunc,
 }
 
-type Options struct {
-	StateStore     string
-	StateStorePath string
-	Name           string
-	CloudId        string
-	Set            string
-	AwsProfile     string
-
-	GitRemote string
-
-	S3AccessKey       string
-	S3SecretKey       string
-	BucketEndpointURL string
-	BucketSSL         bool
-	BucketName        string
-}
-
 func Execute() {
+
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(-1)
@@ -95,10 +83,12 @@ func Execute() {
 }
 
 func init() {
+	cobra.OnInitialize(initConfig)
+
 	//flags here
-	RootCmd.PersistentFlags().IntVarP(&logger.Level, "verbose", "v", 3, "Log level")
-	RootCmd.PersistentFlags().BoolVarP(&logger.Color, "color", "C", true, "Toggle colorized logs")
-	RootCmd.PersistentFlags().BoolVarP(&logger.Fabulous, "fab", "f", false, "Toggle colorized logs")
+	addPersistentFlagInt(RootCmd, &logger.Level, "verbose", "v", 3, "Log level")
+	addPersistentFlagBool(RootCmd, &logger.Color, "color", "C", true, "Toggle colorized logs")
+	addPersistentFlagBool(RootCmd, &logger.Fabulous, "fab", "f", false, "Toggle colorized logs")
 
 	// add commands
 	addCommands()
@@ -111,7 +101,6 @@ func addCommands() {
 	RootCmd.AddCommand(CreateCmd())
 	RootCmd.AddCommand(DeleteCmd())
 	RootCmd.AddCommand(EditCmd())
-	RootCmd.AddCommand(ExplainCmd())
 	RootCmd.AddCommand(GetConfigCmd())
 	RootCmd.AddCommand(ImageCmd())
 	RootCmd.AddCommand(ListCmd())
@@ -131,4 +120,28 @@ func flagApplyAnnotations(cmd *cobra.Command, flag, completion string) {
 			completion,
 		)
 	}
+}
+
+func initConfig() {
+
+	viper.SetConfigType("yaml")
+	viper.SetConfigFile(cfgFile)
+
+	viper.SetEnvPrefix("KUBICORN")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		panic(fmt.Sprintf("WIP: unable to read config file"))
+		os.Exit(1)
+	}
+}
+
+func addPersistentFlagInt(cmd *cobra.Command, field *int, name, shorthand string, value int, usage string) {
+	cmd.PersistentFlags().IntVarP(field, name, shorthand, value, usage)
+	viper.BindPFlag(name, cmd.PersistentFlags().Lookup(name))
+}
+
+func addPersistentFlagBool(cmd *cobra.Command, field *bool, name, shorthand string, value bool, usage string) {
+	cmd.PersistentFlags().BoolVarP(field, name, shorthand, value, usage)
+	viper.BindPFlag(name, cmd.PersistentFlags().Lookup(name))
 }
